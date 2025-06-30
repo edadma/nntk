@@ -18,8 +18,8 @@ ThisBuild / sonatypeProfileName := "io.github.edadma"
 
 ThisBuild / scmInfo := Some(
   ScmInfo(
-    url("https://github.com/edadma/cross_template"),
-    "scm:git@github.com:edadma/cross_template.git",
+    url("https://github.com/edadma/nntk"),
+    "scm:git@github.com:edadma/nntk.git",
   ),
 )
 ThisBuild / developers := List(
@@ -31,7 +31,7 @@ ThisBuild / developers := List(
   ),
 )
 
-ThisBuild / homepage := Some(url("https://github.com/edadma/cross_template"))
+ThisBuild / homepage := Some(url("https://github.com/edadma/nntk"))
 
 ThisBuild / pomIncludeRepository := { _ => false }
 ThisBuild / publishTo            := {
@@ -41,10 +41,10 @@ ThisBuild / publishTo            := {
 }
 ThisBuild / publishMavenStyle := true
 
-lazy val cross_template = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+lazy val nntk = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .in(file("."))
   .settings(
-    name := "cross_template",
+    name := "nntk",
     scalacOptions ++=
       Seq(
         "-deprecation",
@@ -55,7 +55,7 @@ lazy val cross_template = crossProject(JSPlatform, JVMPlatform, NativePlatform)
         "-language:existentials",
         "-language:dynamics",
       ),
-//    libraryDependencies += "org.scalatest" %%% "scalatest" % "3.2.19" % "test",
+    libraryDependencies += "org.scalatest" %%% "scalatest" % "3.2.19" % "test",
 //    libraryDependencies ++= Seq(
 //      "io.github.edadma" %%% "cross-platform" % "0.0.10"
 //    ),
@@ -89,9 +89,9 @@ lazy val cross_template = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 lazy val root = project
   .in(file("."))
-  .aggregate(cross_template.js, cross_template.jvm, cross_template.native)
+  .aggregate(nntk.js, nntk.jvm, nntk.native)
   .settings(
-    name                := "cross_template",
+    name                := "nntk",
     publish / skip      := true,
     publishLocal / skip := true,
   )
