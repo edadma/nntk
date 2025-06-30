@@ -58,6 +58,7 @@ lazy val nntk = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     libraryDependencies += "org.scalatest" %%% "scalatest" % "3.2.19" % "test",
     libraryDependencies ++= Seq(
       "io.github.edadma" %%% "matrix" % "0.0.2",
+      "io.github.edadma" %%% "logger" % "0.0.11",
     ),
     libraryDependencies ++= Seq(
 //      "com.github.scopt" %%% "scopt" % "4.1.0",
