@@ -80,33 +80,3 @@ class Layer(val inputSize: Int, val outputSize: Int, activationFn: String = "sig
     weights.transpose * delta
   }
 }
-
-// Also create a simple XOR test that's easier to debug
-@main def simpleXorTest(): Unit = {
-  println("Simple XOR Test")
-  println("===============")
-
-  // Create a very simple network: 2 -> 2 -> 1
-  val network = new NeuralNetwork(List(2, 2, 1), List("sigmoid", "sigmoid"))
-
-  val input  = Matrix.col(1.0, 0.0)
-  val target = Matrix.col(1.0)
-
-  println(s"Input: ${input.rows}x${input.cols}")
-  println(s"Target: ${target.rows}x${target.cols}")
-
-  try {
-    val output = network.forward(input)
-    println(s"Output: ${output.rows}x${output.cols}, value: ${output(1, 1)}")
-
-    val loss = network.train(input, target, 0.1)
-    println(s"Loss: $loss")
-
-    println("✅ Simple test passed!")
-
-  } catch {
-    case e: Exception =>
-      println(s"❌ Error: ${e.getMessage}")
-      e.printStackTrace()
-  }
-}
