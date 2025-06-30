@@ -74,8 +74,12 @@ class Layer(
   private var lastPreActivation: Matrix[Double] = uninitialized
 
   logger.debug(s"Created $name layer: ${inputSize} inputs → ${outputSize} outputs")
-  logger.debug(s"Initial weights shape: ${weights.rows}x${weights.cols}")
-  logger.debug(s"Initial biases shape: ${biases.rows}x${biases.cols}")
+  logger.debug(s"Initial weights shape: ${weights.rows}x${weights.cols}, biases: ${biases.rows}x${biases.cols}")
+
+  // Log initial weight/bias ranges for debugging initialization issues
+  val weightRange = f"[${weights.min}%.3f to ${weights.max}%.3f]"
+  val biasRange   = f"[${biases.min}%.3f to ${biases.max}%.3f]"
+  logger.debug(s"$name initial weight range: $weightRange, bias range: $biasRange")
 
   // Forward pass: calculate this layer's output given an input
   def forward(input: Matrix[Double]): Matrix[Double] = {
@@ -90,7 +94,13 @@ class Layer(
     // Apply activation function to each element
     lastOutput = lastPreActivation.map(activation.apply)
 
-    logger.trace(s"$name forward pass completed", category = "LAYER")
+    // Debug check for numerical issues
+    if (lastOutput.exists(x => x.isNaN || x.isInfinite)) {
+      logger.debug(s"WARNING: $name forward pass produced NaN/Infinite values!", category = "ERROR")
+      logger.debug(s"  Input: ${input.transpose}", category = "ERROR")
+      logger.debug(s"  Output: ${lastOutput.transpose}", category = "ERROR")
+    }
+
     lastOutput
   }
 
@@ -105,6 +115,18 @@ class Layer(
     // Delta: how much each neuron should change (error * how sensitive the activation is)
     val delta = outputError.elemMul(activationDerivative)
 
+    // Check for gradient explosion/vanishing
+    val maxDelta = delta.map(math.abs).max
+    if (maxDelta > 10.0) {
+      logger.debug(f"WARNING: Large gradient detected in $name: max delta = $maxDelta%.6f", category = "ERROR")
+    }
+    if (maxDelta < 1e-8) {
+      logger.debug(
+        f"WARNING: Very small gradient in $name: max delta = $maxDelta%.6f (vanishing gradient?)",
+        category = "ERROR",
+      )
+    }
+
     // Calculate gradients for weights and biases
     val weightGradient = delta * lastInput.transpose // outer product
     val biasGradient   = delta
@@ -113,10 +135,15 @@ class Layer(
     weights = weights - weightGradient * learningRate
     biases = biases - biasGradient * learningRate
 
+    // Check for weight explosion
+    val maxWeight = weights.map(math.abs).max
+    if (maxWeight > 100.0) {
+      logger.debug(f"WARNING: Large weights detected in $name: max weight = $maxWeight%.6f", category = "ERROR")
+    }
+
     // Calculate error to pass to previous layer
     val inputError = weights.transpose * delta
 
-    logger.trace(s"$name backward pass completed", category = "LAYER")
     inputError
   }
 
@@ -165,6 +192,11 @@ class NeuralNetwork(layers: Layer*)(implicit logger: Logger) {
     // Calculate loss
     val loss = calculateLoss(prediction, target)
 
+    // Check for training issues
+    if (loss.isNaN || loss.isInfinite) {
+      logger.debug(s"WARNING: Loss is ${loss} for input ${input.transpose}", category = "ERROR")
+    }
+
     // Calculate initial error (how wrong we were)
     val outputError = prediction - target
 
@@ -192,6 +224,8 @@ class Trainer(network: NeuralNetwork)(implicit logger: Logger) {
 
     logger.info(s"Starting training for $epochs epochs with learning rate $learningRate")
     logger.info(s"Training data: ${trainingData.length} samples")
+    logger.debug(s"Logging every $logEveryNEpochs epochs")
+    logger.debug(s"Target loss threshold: $targetLoss")
 
     var averageLoss = Double.MaxValue // Initialize to a high value
     var epoch       = 1
@@ -206,6 +240,14 @@ class Trainer(network: NeuralNetwork)(implicit logger: Logger) {
       }
 
       averageLoss = totalLoss / trainingData.length
+
+      // Debug logging for first few epochs and problematic cases
+      if (epoch <= 3) {
+        logger.debug(f"Epoch $epoch: Detailed loss = $averageLoss%.6f", category = "EARLY")
+      }
+      if (averageLoss > 1.0 && epoch > 100) {
+        logger.debug(f"WARNING: High loss at epoch $epoch: $averageLoss%.6f", category = "ERROR")
+      }
 
       // Log progress periodically
       if (epoch % logEveryNEpochs == 0 || epoch == 1) {
@@ -239,8 +281,9 @@ class Trainer(network: NeuralNetwork)(implicit logger: Logger) {
   def test(testData: Seq[(Matrix[Double], Matrix[Double])]): Unit = {
     logger.info("=== FINAL TEST RESULTS ===")
 
-    // Create plain text table for logging
+    // Create plain text table for logging (no ANSI codes)
     val logTable = new TextTable() {
+      noansi() // Disable ANSI sequences for clean log output
       header("Input 1", "Input 2", "Target", "Predicted", "Correct?")
 
       testData.foreach { case (input, target) =>
@@ -248,6 +291,10 @@ class Trainer(network: NeuralNetwork)(implicit logger: Logger) {
         val predicted  = prediction(1, 1)
         val targetVal  = target(1, 1)
         val isCorrect  = math.abs(predicted - targetVal) < 0.5
+
+        logger.debug(
+          f"Test case: Input(${input(1, 1)}%.0f,${input(2, 1)}%.0f) → Target: $targetVal%.0f, Predicted: $predicted%.6f, Correct: $isCorrect",
+        )
 
         row(
           f"${input(1, 1)}%.0f",
@@ -259,7 +306,7 @@ class Trainer(network: NeuralNetwork)(implicit logger: Logger) {
       }
     }
 
-    // Log the plain text version
+    // Log the plain text version (no ANSI codes)
     logger.info("Test Results Table:")
     logTable.toString.split('\n').foreach(line => logger.info(line))
 
@@ -310,7 +357,7 @@ class Trainer(network: NeuralNetwork)(implicit logger: Logger) {
 @main def run(args: String*): Unit = {
   // Set up logging
   implicit val logger: Logger = LoggerFactory.getLogger
-  logger.setLogLevel(LogLevel.INFO) // Change to DEBUG for more detail
+  logger.setLogLevel(LogLevel.DEBUG) // Enable debug logging for detailed output
   LoggerFactory.setFileLogging()
 
   // Colorful console welcome
@@ -323,6 +370,15 @@ class Trainer(network: NeuralNetwork)(implicit logger: Logger) {
   // Plain logging
   logger.info("=== Neural Network Toolkit - XOR Example ===")
   logger.info(s"Configuration: ${Config.epochs} epochs, learning rate ${Config.learningRate}")
+  logger.debug("=== CONFIGURATION DETAILS ===")
+  logger.debug(s"Random seed: ${Config.randomSeed}")
+  logger.debug(s"Learning rate (step size): ${Config.learningRate}")
+  logger.debug(s"Max epochs (training cycles): ${Config.epochs}")
+  logger.debug(s"Target loss (stopping criteria): ${Config.targetLoss}")
+  logger.debug(s"Log frequency: every ${Config.logEveryNEpochs} epochs")
+  logger.debug(s"Network architecture: ${Config.inputSize} → ${Config.hiddenSize} → ${Config.outputSize}")
+  logger.debug(s"Activation function: ${Sigmoid.name}")
+  logger.debug("================================")
 
   // Set random seed for reproducible results
   Random.setSeed(Config.randomSeed)
